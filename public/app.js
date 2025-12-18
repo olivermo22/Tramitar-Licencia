@@ -128,13 +128,13 @@ async function cargarSucursales(lat, lng, inicial = false) {
 }
 
 function initMap(lat, lng, locations) {
-  map = L.map("map").setView([lat, lng], 14);
+  map = L.map("map").setView([lat, lng], 13); // 👈 más alejado
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
 
-  // 📍 Marcador de tu ubicación
+  // 📍 marcador de ubicación actual
   userMarker = L.circleMarker([lat, lng], {
     radius: 8,
     color: "#1a73e8",
@@ -154,6 +154,7 @@ function initMap(lat, lng, locations) {
     }, 600);
   });
 }
+
 
 document
   .getElementById("btnCentrarUbicacion")
@@ -189,13 +190,24 @@ function seleccionarSucursal(loc) {
 
   const addr = loc.place.address;
 
+  const direccionCompleta =
+    `${addr.streetAddress}, ` +
+    `${addr.addressLocality}, ` +
+    `${addr.countryCode || "MX"}, ` +
+    `CP ${addr.postalCode}`;
+
+  const googleMapsLink =
+    `https://www.google.com/maps?q=` +
+    `${loc.place.geo.latitude},${loc.place.geo.longitude}`;
+
   document.getElementById("modalSucursalNombre").textContent = loc.name;
-  document.getElementById(
-    "modalSucursalDireccion"
-  ).textContent = `${addr.streetAddress}, ${addr.addressLocality}, CP ${addr.postalCode}`;
+  document.getElementById("modalSucursalDireccion").innerHTML =
+    `${direccionCompleta}<br>` +
+    `<a href="${googleMapsLink}" target="_blank">📍 Ver en Google Maps</a>`;
 
   document.getElementById("modalSucursal").classList.remove("hidden");
 }
+
 
 document
   .getElementById("btnCancelarSucursal")
@@ -924,3 +936,46 @@ if (form) {
     }
   });
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btnCancelar = document.getElementById("btnCancelarSucursal");
+  const btnConfirmar = document.getElementById("btnConfirmarSucursal");
+  const modal = document.getElementById("modalSucursal");
+
+  if (btnCancelar) {
+    btnCancelar.addEventListener("click", () => {
+      sucursalPendiente = null;
+      modal.classList.add("hidden");
+    });
+  }
+
+  if (btnConfirmar) {
+    btnConfirmar.addEventListener("click", () => {
+      if (!sucursalPendiente) return;
+
+      const loc = sucursalPendiente;
+      const addr = loc.place.address;
+
+      document.getElementById("sucursalSeleccionada").value =
+        `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+
+      inputEnvioCalle.value = addr.streetAddress || "";
+      inputEnvioNumero.value = "";
+      inputEnvioColonia.value = addr.addressLocality || "";
+      inputEnvioCP.value = addr.postalCode || "";
+      inputEnvioCiudadEstado.value =
+        `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
+
+      document.getElementById("envioSucursalId").value =
+        loc.location.ids[0].locationId;
+
+      map.setView(
+        [loc.place.geo.latitude, loc.place.geo.longitude],
+        16
+      );
+
+      modal.classList.add("hidden");
+      sucursalPendiente = null;
+    });
+  }
+});
