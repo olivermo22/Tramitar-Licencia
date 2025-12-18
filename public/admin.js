@@ -3,6 +3,7 @@
 const formsBody = document.getElementById("formsBody");
 const adminError = document.getElementById("adminError");
 const btnLogout = document.getElementById("btnLogout");
+const ADMIN_WHATSAPP_NUMBER = "527225600905"; // tu número real
 
 if (btnLogout) {
   btnLogout.addEventListener("click", async () => {
@@ -141,6 +142,7 @@ btnReenviar.addEventListener("click", () => {
 });
 
  tdComentarios.appendChild(btnReenviar);
+ tr.appendChild(tdComentarios);
 
 
     formsBody.appendChild(tr);
@@ -155,7 +157,7 @@ function construirMensajeWhatsApp(f) {
     `NUM TELEFONO : ${f.telefono || ""}`,
     `TIPO DE LICENCIA : ${f.tipoLicencia || ""}`,
     `VALIDA POR : ${f.vigencia || ""}`,
-    `NOMBRE COMPLETO : ${f.nombreCompleto || ""}`,
+    `NOMBRE COMPLETO : ${[f.nombre, f.apellidos].filter(Boolean).join(" ")}`,
     `CURP : ${f.curp || ""}`,
     `DOMICILIO DE GUERRERO ACEPTADO : ${f.domicilioGuerrero || ""}`,
     `ALERGIAS/RESTRICCIONES : ${f.alergias || "Ninguna"}`,
