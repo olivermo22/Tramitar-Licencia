@@ -165,7 +165,7 @@ function construirMensajeWhatsApp(f) {
     `CONTACTO DE EMERGENCIA : ${f.emergenciaNombre || ""} ${f.emergenciaTelefono || ""}`,
     "",
     "DATOS DE ENVÍO",
-    `SUCURSAL DHL : ${f.sucursalSeleccionada || ""}`,
+    `SUCURSAL DHL : ${f.sucursalConfirmada || ""}`,
     `NOMBRE DESTINATARIO : ${f.envioNombreDestinatario || ""}`,
     `TELÉFONO DESTINATARIO : ${f.envioTelefonoDestinatario || ""}`,
     "",
