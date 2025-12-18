@@ -5,33 +5,6 @@ import multer from "multer";
 import session from "express-session";
 import { fileURLToPath } from "url";
 
-app.get("/api/dhl/locations", async (req, res) => {
-  try {
-    const { lat, lng } = req.query;
-
-    if (!lat || !lng) {
-      return res.status(400).json({ error: "Lat/Lng requeridos" });
-    }
-
-    const url =
-      `https://api.dhl.com/location-finder/v1/find-by-geo` +
-      `?latitude=${lat}&longitude=${lng}&radius=5000&limit=10`;
-
-    const r = await fetch(url, {
-      headers: {
-        "DHL-API-Key": process.env.DHL_API_KEY,
-      },
-    });
-
-    const data = await r.json();
-    res.json(data);
-  } catch (err) {
-    console.error("DHL error:", err);
-    res.status(500).json({ error: "Error consultando DHL" });
-  }
-});
-
-
 // === CONFIG ESM ===
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -158,6 +131,32 @@ app.post("/api/login", (req, res) => {
 
 app.post("/api/logout", (req, res) => {
   req.session.destroy(() => res.json({ success: true }));
+});
+
+app.get("/api/dhl/locations", async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ error: "Lat/Lng requeridos" });
+    }
+
+    const url =
+      `https://api.dhl.com/location-finder/v1/find-by-geo` +
+      `?latitude=${lat}&longitude=${lng}&radius=5000&limit=10`;
+
+    const r = await fetch(url, {
+      headers: {
+        "DHL-API-Key": process.env.DHL_API_KEY,
+      },
+    });
+
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    console.error("DHL error:", err);
+    res.status(500).json({ error: "Error consultando DHL" });
+  }
 });
 
 // =========================
