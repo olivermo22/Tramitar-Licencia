@@ -165,12 +165,12 @@ function construirMensajeWhatsApp(f) {
     `CONTACTO DE EMERGENCIA : ${f.emergenciaNombre || ""} ${f.emergenciaTelefono || ""}`,
     "",
     "DATOS DE ENVÍO",
-    `SUCURSAL DHL : ${f.sucursalNombre || ""}`,
+    `SUCURSAL DHL : ${f.sucursalSeleccionada || ""}`,
     `NOMBRE DESTINATARIO : ${f.envioNombreDestinatario || ""}`,
     `TELÉFONO DESTINATARIO : ${f.envioTelefonoDestinatario || ""}`,
     "",
     "📍 UBICACIÓN SUCURSAL DHL",
-    f.sucursalGoogleMaps || "",
+    f.envioGoogleMaps || "",
     "",
     f.fotoPersona ? `FOTO PERSONA : ${location.origin}${f.fotoPersona}` : "",
     f.fotoIdentificacion ? `FOTO IDENTIFICACION : ${location.origin}${f.fotoIdentificacion}` : "",
@@ -179,6 +179,7 @@ function construirMensajeWhatsApp(f) {
 
   return lineas.filter(Boolean).join("\n");
 }
+
 
 
 // Cargar al entrar
