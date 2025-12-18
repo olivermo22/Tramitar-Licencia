@@ -1,8 +1,5 @@
 // app.js - Frontend principal del formulario de Gestoría Virtual
 
-// ===============================
-// CONFIGURACIÓN
-// ===============================
 const ADMIN_WHATSAPP_NUMBER = "527225600905"; // 52 + 7225600905
 
 // ===============================
@@ -12,12 +9,32 @@ const btnAdmin = document.getElementById("btnAdmin");
 const form = document.getElementById("solicitudForm");
 const globalLoader = document.getElementById("globalLoader");
 
-// Datos del formulario
+// Datos personales
 const inputNombre = document.getElementById("nombre");
+const inputApellidos = document.getElementById("apellidos");
 const inputCurp = document.getElementById("curp");
 const inputTelefono = document.getElementById("telefono");
-const inputEmail = document.getElementById("email");
-const inputComentarios = document.getElementById("comentarios");
+const inputTipoLicencia = document.getElementById("tipoLicencia");
+const inputVigencia = document.getElementById("vigencia");
+const inputDomicilioGuerrero = document.getElementById("domicilioGuerrero");
+const inputAlergias = document.getElementById("alergias");
+const inputTipoSangre = document.getElementById("tipoSangre");
+const inputEmergenciaNombre = document.getElementById("emergenciaNombre");
+const inputEmergenciaTelefono = document.getElementById("emergenciaTelefono");
+
+// Datos de envío
+const inputEnvioNombreDestinatario = document.getElementById("envioNombreDestinatario");
+const inputEnvioTelefonoDestinatario = document.getElementById("envioTelefonoDestinatario");
+const inputEnvioCalle = document.getElementById("envioCalle");
+const inputEnvioNumero = document.getElementById("envioNumero");
+const inputEnvioColonia = document.getElementById("envioColonia");
+const inputEnvioCP = document.getElementById("envioCP");
+const inputEnvioCiudadEstado = document.getElementById("envioCiudadEstado");
+
+// Inputs ocultos para URLs
+const inputPersonaPhotoUrl = document.getElementById("personaPhotoUrl");
+const inputIdPhotoUrl = document.getElementById("idPhotoUrl");
+const inputFirmaUrl = document.getElementById("firmaUrl");
 
 // Foto persona
 const btnPersonaCamera = document.getElementById("btnPersonaCamera");
@@ -27,7 +44,6 @@ const fotoPersonaPreview = document.getElementById("fotoPersonaPreview");
 const fotoPersonaActions = document.getElementById("fotoPersonaActions");
 const btnPersonaUsar = document.getElementById("btnPersonaUsar");
 const btnPersonaCambiar = document.getElementById("btnPersonaCambiar");
-const inputPersonaPhotoUrl = document.getElementById("personaPhotoUrl");
 
 // Foto identificación
 const btnIdCamera = document.getElementById("btnIdCamera");
@@ -37,7 +53,6 @@ const fotoIdPreview = document.getElementById("fotoIdPreview");
 const fotoIdActions = document.getElementById("fotoIdActions");
 const btnIdUsar = document.getElementById("btnIdUsar");
 const btnIdCambiar = document.getElementById("btnIdCambiar");
-const inputIdPhotoUrl = document.getElementById("idPhotoUrl");
 
 // Firma
 const tabFirmaSubir = document.getElementById("tabFirmaSubir");
@@ -50,17 +65,14 @@ const firmaPreview = document.getElementById("firmaPreview");
 
 const signaturePad = document.getElementById("signaturePad");
 const btnLimpiarFirma = document.getElementById("btnLimpiarFirma");
-const btnConfirmarFirmaCanvas = document.getElementById(
-  "btnConfirmarFirmaCanvas"
-);
-
+const btnConfirmarFirmaCanvas = document.getElementById("btnConfirmarFirmaCanvas");
 const firmaActions = document.getElementById("firmaActions");
 const btnFirmaCambiar = document.getElementById("btnFirmaCambiar");
-const inputFirmaUrl = document.getElementById("firmaUrl");
 
-// Cámara (modal)
+// Cámara
 const cameraModal = document.getElementById("cameraModal");
 const cameraVideo = document.getElementById("cameraVideo");
+const cameraSilhouette = document.getElementById("cameraSilhouette");
 const takePhotoBtn = document.getElementById("takePhotoBtn");
 const closeCameraBtn = document.getElementById("closeCameraBtn");
 
@@ -80,6 +92,62 @@ if (btnAdmin) {
     window.location.href = "/login.html";
   });
 }
+
+navigator.geolocation.getCurrentPosition(async pos => {
+  const { latitude, longitude } = pos.coords;
+
+  const res = await fetch(
+    `/api/dhl/locations?lat=${latitude}&lng=${longitude}`
+  );
+  const data = await res.json();
+
+  initMap(data.locations);
+});
+
+function initMap(locations) {
+  if (!locations || locations.length === 0) {
+    alert("No se encontraron sucursales DHL cercanas.");
+    return;
+  }
+
+  const map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 13,
+    center: {
+      lat: locations[0].place.geo.latitude,
+      lng: locations[0].place.geo.longitude
+    }
+  });
+
+  locations.forEach(loc => {
+    const marker = new google.maps.Marker({
+      position: {
+        lat: loc.place.geo.latitude,
+        lng: loc.place.geo.longitude
+      },
+      map,
+      title: loc.name
+    });
+
+    marker.addListener("click", () => {
+      seleccionarSucursal(loc);
+    });
+  });
+}
+
+function seleccionarSucursal(loc) {
+  document.getElementById("sucursalSeleccionada").value = loc.name;
+
+  inputEnvioCalle.value = loc.place.address.streetAddress || "";
+  inputEnvioNumero.value = ""; // DHL no siempre da número separado
+  inputEnvioColonia.value = loc.place.address.addressLocality || "";
+  inputEnvioCP.value = loc.place.address.postalCode || "";
+  inputEnvioCiudadEstado.value =
+    `${loc.place.address.addressLocality}, MX`;
+
+  document.getElementById("envioSucursalId").value =
+    loc.location.ids[0].locationId;
+}
+
 
 // ===============================
 // HELPERS UI
@@ -121,36 +189,114 @@ function resetPreview(container, placeholderText) {
 }
 
 // ===============================
-// CÁMARA (MODAL)
+// CÁMARA – SELECCIONAR MEJOR LENTE
 // ===============================
-async function openCamera(callback) {
+
+// Detectar la mejor cámara trasera REAL del dispositivo
+async function getBestRearCamera() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  
+  // Obtener todas las cámaras de video
+  const videoDevices = devices.filter(d => d.kind === "videoinput");
+
+  // Si no hay cámaras, retornar null
+  if (videoDevices.length === 0) return null;
+
+  let bestDeviceId = null;
+  let bestResolution = 0;
+
+  // Probar cada cámara trasera (Chrome NO dice rear, así que probamos todas)
+  for (const device of videoDevices) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: device.deviceId } },
+      });
+
+      const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+
+      const width = capabilities.width?.max || 0;
+      const height = capabilities.height?.max || 0;
+      const megapixels = width * height;
+
+      // Cerrar stream
+      track.stop();
+
+      // Elegimos la cámara de mayor resolución
+      if (megapixels > bestResolution) {
+        bestResolution = megapixels;
+        bestDeviceId = device.deviceId;
+      }
+    } catch (err) {
+      // Algunas cámaras fallan al pedir stream → las ignoramos
+      continue;
+    }
+  }
+
+  return bestDeviceId;
+}
+
+
+// Abrir cámara (frontal o trasera)
+async function openCamera(callback, options = { silhouette: true, rearCamera: false }) {
   cameraCallback = callback;
+
+  if (cameraSilhouette) {
+    cameraSilhouette.style.display = options.silhouette ? "block" : "none";
+  }
+
   cameraModal.style.display = "flex";
 
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-      audio: false,
-    });
+    let constraints;
+
+    if (options.rearCamera) {
+      const rearDeviceId = await getBestRearCamera();
+
+      if (rearDeviceId) {
+        constraints = {
+          video: {
+            deviceId: { exact: rearDeviceId },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        };
+      } else {
+        constraints = {
+          video: { facingMode: "environment" },
+          audio: false
+        };
+      }
+    } else {
+      constraints = {
+        video: { facingMode: "user" },
+        audio: false
+      };
+    }
+
+    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
     cameraVideo.srcObject = cameraStream;
+
   } catch (err) {
     console.error("Error accediendo a la cámara:", err);
-    alert("No se pudo acceder a la cámara. Revisa los permisos.");
+    alert("No se pudo acceder a la cámara. Revisa permisos.");
     closeCamera();
   }
 }
 
 function closeCamera() {
   cameraModal.style.display = "none";
+
   if (cameraStream) {
-    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream.getTracks().forEach(t => t.stop());
     cameraStream = null;
   }
+
   cameraCallback = null;
 }
 
-if (takePhotoBtn) {
-  takePhotoBtn.addEventListener("click", async () => {
+takePhotoBtn.addEventListener("click", async () => {
   const canvas = document.createElement("canvas");
   canvas.width = cameraVideo.videoWidth;
   canvas.height = cameraVideo.videoHeight;
@@ -158,17 +304,15 @@ if (takePhotoBtn) {
   const ctx = canvas.getContext("2d");
   ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
 
-  // Convertir a blob usando Promise
-  const blob = await new Promise((resolve) =>
+  const blob = await new Promise(resolve =>
     canvas.toBlob(resolve, "image/jpeg", 0.95)
   );
 
   if (!blob) {
-    alert("No se pudo obtener la foto, intenta nuevamente.");
+    alert("No se pudo obtener la foto.");
     return;
   }
 
-  // Enviar la foto a quien la solicitó
   if (cameraCallback) {
     await cameraCallback(blob);
   }
@@ -176,16 +320,11 @@ if (takePhotoBtn) {
   closeCamera();
 });
 
-}
+closeCameraBtn.addEventListener("click", closeCamera);
 
-if (closeCameraBtn) {
-  closeCameraBtn.addEventListener("click", () => {
-    closeCamera();
-  });
-}
 
 // ===============================
-// SUBIDA GENÉRICA DE IMÁGENES
+// SUBIDA DE IMÁGENES
 // ===============================
 async function uploadImage(fileOrBlob, type) {
   const formData = new FormData();
@@ -224,9 +363,13 @@ if (btnPersonaFile && fotoPersonaInput) {
 
 if (btnPersonaCamera) {
   btnPersonaCamera.addEventListener("click", () => {
-    openCamera(async (blob) => {
-      await handlePersonaImage(blob);
-    });
+    // Persona: cámara frontal + silueta
+    openCamera(
+      async (blob) => {
+        await handlePersonaImage(blob);
+      },
+      { silhouette: true, rearCamera: false }
+    );
   });
 }
 
@@ -283,9 +426,13 @@ if (btnIdFile && fotoIdInput) {
 
 if (btnIdCamera) {
   btnIdCamera.addEventListener("click", () => {
-    openCamera(async (blob) => {
-      await handleIdImage(blob);
-    });
+    // Identificación: cámara trasera + SIN silueta
+    openCamera(
+      async (blob) => {
+        await handleIdImage(blob);
+      },
+      { silhouette: false, rearCamera: true }
+    );
   });
 }
 
@@ -505,15 +652,73 @@ if (form) {
     e.preventDefault();
 
     const nombre = inputNombre.value.trim();
+    const apellidos = inputApellidos.value.trim();
     const curp = inputCurp.value.trim();
     const telefono = inputTelefono.value.trim();
-    const email = inputEmail.value.trim();
-    const comentarios = inputComentarios.value.trim();
+    const tipoLicencia = inputTipoLicencia.value;
+    const vigencia = inputVigencia.value;
+    const domicilioAceptado = inputDomicilioGuerrero.checked;
+    const alergias = inputAlergias.value.trim();
+    const tipoSangre = inputTipoSangre.value;
+    const emergenciaNombre = inputEmergenciaNombre.value.trim();
+    const emergenciaTelefono = inputEmergenciaTelefono.value.trim();
 
-    if (!nombre || !curp || !telefono) {
-      alert("Por favor, llena al menos Nombre, CURP y Teléfono.");
+    const envioNombreDestinatario = inputEnvioNombreDestinatario.value.trim();
+    const envioTelefonoDestinatario = inputEnvioTelefonoDestinatario.value.trim();
+    const envioCalle = inputEnvioCalle.value.trim();
+    const envioNumero = inputEnvioNumero.value.trim();
+    const envioColonia = inputEnvioColonia.value.trim();
+    const envioCP = inputEnvioCP.value.trim();
+    const envioCiudadEstado = inputEnvioCiudadEstado.value.trim();
+    const envioSucursalId = document.getElementById("envioSucursalId").value;
+    const envioSucursalNombre = document.getElementById("sucursalSeleccionada").value;
+  
+
+
+
+    if (!nombre || !apellidos || !curp || !telefono) {
+      alert("Por favor, llena al menos Nombre(s), Apellidos, CURP y Teléfono.");
       return;
     }
+
+    if (!tipoLicencia) {
+      alert("Selecciona el tipo de licencia.");
+      return;
+    }
+
+    if (!vigencia) {
+      alert("Selecciona la vigencia de la licencia.");
+      return;
+    }
+
+    if (!domicilioAceptado) {
+      alert("Debes aceptar que la licencia lleve domicilio del estado de Guerrero.");
+      return;
+    }
+
+    if (!tipoSangre) {
+      alert("Selecciona el tipo de sangre.");
+      return;
+    }
+
+    if (!emergenciaNombre || !emergenciaTelefono) {
+      alert("Completa los datos de contacto de emergencia.");
+      return;
+    }
+
+    if (
+      !envioNombreDestinatario ||
+      !envioTelefonoDestinatario
+    ) {
+      alert("Completa todos los datos de envío.");
+      return;
+    }
+
+    if (!document.getElementById("envioSucursalId").value) {
+      alert("Selecciona una sucursal DHL para el envío.");
+      return;
+    }
+
 
     if (!personaUrl) {
       alert("Falta la foto de la persona.");
@@ -530,10 +735,25 @@ if (form) {
 
     const payload = {
       nombre,
+      apellidos,
       curp,
       telefono,
-      email,
-      comentarios,
+      tipoLicencia,
+      vigencia,
+      domicilioAceptado,
+      alergias,
+      tipoSangre,
+      emergenciaNombre,
+      emergenciaTelefono,
+      envioNombreDestinatario,
+      envioTelefonoDestinatario,
+      envioCalle,
+      envioNumero,
+      envioColonia,
+      envioCP,
+      envioCiudadEstado,
+      envioSucursalId,
+      envioSucursalNombre,
       personaPhotoUrl: personaUrl,
       idPhotoUrl: idUrl,
       firmaUrl,
@@ -542,7 +762,7 @@ if (form) {
     try {
       showGlobalLoader(true);
 
-      // 1) Guardar en el servidor para el panel admin
+      // 1) Guardar en el servidor para el panel admin (y obtener # de respuesta)
       const res = await fetch("/api/forms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -553,30 +773,65 @@ if (form) {
         throw new Error("Error guardando el formulario en el servidor");
       }
 
-      // 2) Construir mensaje de WhatsApp
-      const baseUrl = window.location.origin;
-      const lines = [
-        "NUEVA SOLICITUD DE TRÁMITE",
-        "",
-        `Nombre: ${nombre}`,
-        `CURP: ${curp}`,
-        `Teléfono: ${telefono}`,
-        email ? `Email: ${email}` : "",
-        comentarios ? `Comentarios: ${comentarios}` : "",
-        "",
-        `Foto persona: ${baseUrl}${personaUrl}`,
-        `Identificación: ${baseUrl}${idUrl}`,
-        `Firma: ${baseUrl}${firmaUrl}`,
-        "",
-        "Enviado desde el formulario web.",
-      ].filter(Boolean);
+      const data = await res.json();
+      const folio = data?.form?.responseNumber || data?.form?.id || "----";
 
-      const text = encodeURIComponent(lines.join("\n"));
+      // 2) Construir mensaje de WhatsApp
+      const licenciaMap = {
+        A: "AUTOMOVILISTA - A",
+        C: "CHOFER - C",
+        M: "MOTOCICLISTA - M",
+      };
+      const vigenciaMap = {
+        "3": "3 AÑOS $650",
+        "5": "5 AÑOS $700",
+      };
+
+      const licenciaTexto = licenciaMap[tipoLicencia] || tipoLicencia;
+      const vigenciaTexto = vigenciaMap[vigencia] || vigencia;
+      const domicilioTexto = domicilioAceptado ? "SI" : "NO";
+      const nombreCompleto = `${nombre} ${apellidos}`.trim();
+      const baseUrl = window.location.origin;
+
+      const lineas = [
+        "SOLICITUD LICENCIA DE CONDUCIR",
+        `Respuesta #${folio}`,
+        "",
+        `NUM TELEFONO : ${telefono}`,
+        `TIPO DE LICENCIA : ${licenciaTexto}`,
+        `VALIDA POR : ${vigenciaTexto}`,
+        `NOMBRE COMPLETO : ${nombreCompleto}`,
+        `CURP : ${curp}`,
+        `DOMICILIO DE GUERRERO ACEPTADO : ${domicilioTexto}`,
+        `ALERGIAS/RESTRICCIONES : ${alergias || "Ninguna"}`,
+        `TIPO DE SANGRE : ${tipoSangre}`,
+        `CONTACTO DE EMERGENCIA : ${emergenciaNombre} ${emergenciaTelefono}`,
+        "",
+        "DATOS DE ENVÍO",
+        `SUCURSAL DHL : ${document.getElementById("sucursalSeleccionada").value}`,
+        `NOMBRE DESTINATARIO : ${envioNombreDestinatario}`,
+        `TELÉFONO DESTINATARIO : ${envioTelefonoDestinatario}`,
+        `CALLE : ${envioCalle}`,
+        `NÚMERO : ${envioNumero}`,
+        `COLONIA : ${envioColonia}`,
+        `CP : ${envioCP}`,
+        `CIUDAD Y ESTADO : ${envioCiudadEstado}`,
+        "",
+        `FOTO PERSONA : ${baseUrl}${personaUrl}`,
+        `FOTO IDENTIFICACION : ${baseUrl}${idUrl}`,
+        `FIRMA : ${baseUrl}${firmaUrl}`,
+        "",
+        `PRESIONA EN "ENVIAR POR WHATSAPP", TU SOLICITUD SERÁ ASIGNADA AL NUM: 722 560 09 05 DONDE CONTINUARÁS TU TRÁMITE CON ATENCIÓN PERSONALIZADA.`,
+      ];
+
+      const text = encodeURIComponent(lineas.join("\n"));
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${text}`;
       window.location.href = waUrl;
     } catch (err) {
       console.error(err);
-      alert("Ocurrió un error al guardar o enviar la solicitud. Intenta de nuevo.");
+      alert(
+        "Ocurrió un error al guardar o enviar la solicitud. Intenta de nuevo."
+      );
     } finally {
       showGlobalLoader(false);
     }

@@ -20,7 +20,6 @@ async function loadForms() {
   try {
     const res = await fetch("/api/forms");
     if (res.status === 401) {
-      // No autenticado
       window.location.href = "/login.html";
       return;
     }
@@ -46,7 +45,7 @@ function formatDate(ts) {
     month: "2-digit",
     year: "2-digit",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 }
 
@@ -70,14 +69,16 @@ function renderForms(forms) {
   for (const f of forms) {
     const tr = document.createElement("tr");
 
-    // Fecha
+    // Fecha (incluimos número de respuesta si existe)
     const tdFecha = document.createElement("td");
-    tdFecha.textContent = formatDate(f.createdAt);
+    const folio = f.responseNumber ? `#${f.responseNumber} ` : "";
+    tdFecha.textContent = `${folio}${formatDate(f.createdAt)}`;
     tr.appendChild(tdFecha);
 
     // Nombre
     const tdNombre = document.createElement("td");
-    tdNombre.textContent = f.nombre || "";
+    const nombreCompleto = [f.nombre, f.apellidos].filter(Boolean).join(" ");
+    tdNombre.textContent = nombreCompleto || "";
     tr.appendChild(tdNombre);
 
     // Teléfono
@@ -99,6 +100,7 @@ function renderForms(forms) {
       const img = document.createElement("img");
       img.src = baseUrl + f.personaPhotoUrl;
       img.title = "Foto persona";
+      img.className = "admin-thumb";
       img.onclick = () => window.open(img.src, "_blank");
       wrapper.appendChild(img);
     }
@@ -107,6 +109,7 @@ function renderForms(forms) {
       const img = document.createElement("img");
       img.src = baseUrl + f.idPhotoUrl;
       img.title = "Identificación";
+      img.className = "admin-thumb";
       img.onclick = () => window.open(img.src, "_blank");
       wrapper.appendChild(img);
     }
@@ -115,6 +118,7 @@ function renderForms(forms) {
       const img = document.createElement("img");
       img.src = baseUrl + f.firmaUrl;
       img.title = "Firma";
+      img.className = "admin-thumb";
       img.onclick = () => window.open(img.src, "_blank");
       wrapper.appendChild(img);
     }

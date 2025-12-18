@@ -1,5 +1,4 @@
 // login.js
-
 const loginForm = document.getElementById("loginForm");
 const loginError = document.getElementById("loginError");
 const btnVolverForm = document.getElementById("btnVolverForm");
@@ -20,9 +19,9 @@ if (loginForm) {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
 
       if (!res.ok) {

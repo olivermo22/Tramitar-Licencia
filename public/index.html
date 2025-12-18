@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
-
 <body>
   <header class="top-bar">
     <div class="logo">Gestoría Virtual</div>
@@ -17,14 +16,19 @@
     <section class="card">
       <h1>Solicitud de trámite</h1>
       <p class="subtitle">
-        Completa tus datos y adjunta la información requerida. Al final se abrirá WhatsApp con el mensaje listo.
+        Completa tus datos y adjunta la información requerida. Al final se abrirá WhatsApp con el mensaje listo para enviar.
       </p>
 
       <form id="solicitudForm" class="form">
+        <!-- DATOS PERSONALES -->
+        <div class="field-group">
+          <label for="nombre">Nombre(s) *</label>
+          <input id="nombre" type="text" required />
+        </div>
 
         <div class="field-group">
-          <label for="nombre">Nombre completo *</label>
-          <input id="nombre" type="text" required />
+          <label for="apellidos">Apellidos *</label>
+          <input id="apellidos" type="text" required />
         </div>
 
         <div class="field-group">
@@ -38,27 +42,118 @@
         </div>
 
         <div class="field-group">
-          <label for="email">Correo electrónico (opcional)</label>
-          <input id="email" type="email" />
+          <label for="tipoLicencia">Tipo de licencia *</label>
+          <select id="tipoLicencia" required>
+            <option value="">Selecciona una opción</option>
+            <option value="A">AUTOMOVILISTA - A</option>
+            <option value="C">CHOFER - C</option>
+            <option value="M">MOTOCICLISTA - M</option>
+          </select>
         </div>
 
         <div class="field-group">
-          <label for="comentarios">Comentarios adicionales (opcional)</label>
-          <textarea id="comentarios" rows="3"></textarea>
+          <label for="vigencia">Vigencia *</label>
+          <select id="vigencia" required>
+            <option value="">Selecciona una opción</option>
+            <option value="3">3 AÑOS $650</option>
+            <option value="5">5 AÑOS $700</option>
+          </select>
         </div>
+
+        <div class="field-group">
+          <label>¿Aceptas que la licencia lleve domicilio del estado de Guerrero? *</label>
+          <p class="help">
+            Como la licencia se tramita en Guerrero, se pide que salga con un domicilio de aquí.
+            En caso de no tener domicilio de Guerrero, la licencia saldrá con el domicilio del ayuntamiento donde se realiza el trámite.
+          </p>
+          <label class="inline-checkbox">
+            <input type="checkbox" id="domicilioGuerrero" />
+            <span>Sí, confirmo que acepto que la licencia lleve domicilio del estado de Guerrero.</span>
+          </label>
+        </div>
+
+        <div class="field-group">
+          <label for="alergias">Alergias / Restricciones</label>
+          <input id="alergias" type="text" placeholder="Ej. Ninguna" />
+        </div>
+
+        <div class="field-group">
+          <label for="tipoSangre">Tipo de sangre *</label>
+          <select id="tipoSangre" required>
+            <option value="">Selecciona una opción</option>
+            <option value="O-">O-</option>
+            <option value="O+">O+</option>
+            <option value="A-">A-</option>
+            <option value="A+">A+</option>
+            <option value="B-">B-</option>
+            <option value="B+">B+</option>
+            <option value="AB-">AB-</option>
+            <option value="AB+">AB+</option>
+            <option value="DESCONOCE">Desconoce</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="emergenciaNombre">Nombre de contacto de emergencia *</label>
+          <input id="emergenciaNombre" type="text" required />
+        </div>
+
+        <div class="field-group">
+          <label for="emergenciaTelefono">Teléfono contacto de emergencia *</label>
+          <input id="emergenciaTelefono" type="tel" required />
+        </div>
+
+        <hr class="divider" />
+
+        <!-- DATOS DE ENVÍO -->
+        <section class="section-block">
+          <h2>Datos de envío</h2>
+
+          <div class="field-group">
+            <label for="envioNombreDestinatario">Nombre destinatario *</label>
+            <input id="envioNombreDestinatario" type="text" required />
+          </div>
+
+          <div class="field-group">
+            <label for="envioTelefonoDestinatario">Teléfono destinatario *</label>
+            <input id="envioTelefonoDestinatario" type="tel" required />
+          </div>
+
+          <hr class="divider" />
+
+<section class="section-block">
+  <h2>Selecciona la sucursal DHL más cercana</h2>
+  <p class="help">
+    Elige la sucursal donde se enviará tu trámite.
+  </p>
+
+  <div id="map" style="height:300px;border-radius:12px;"></div>
+
+  <div class="field-group">
+    <label>Sucursal seleccionada</label>
+    <input id="sucursalSeleccionada" type="text" readonly />
+  </div>
+
+        </section>
+
+        <input type="hidden" id="envioCalle" />
+<input type="hidden" id="envioNumero" />
+<input type="hidden" id="envioColonia" />
+<input type="hidden" id="envioCP" />
+<input type="hidden" id="envioCiudadEstado" />
+<input type="hidden" id="envioSucursalId" />
 
         <hr class="divider" />
 
         <!-- FOTO PERSONA -->
         <section class="section-block">
           <h2>1. Foto de la persona</h2>
-          <p class="help">Toma la foto o selecciona un archivo.</p>
+          <p class="help">Toma la foto con buena luz, de frente y sin lentes.</p>
 
           <div class="preview-actions">
             <button type="button" id="btnPersonaCamera" class="btn-secondary small">
               Tomar foto
             </button>
-
             <button type="button" id="btnPersonaFile" class="btn-secondary small">
               Subir archivo
             </button>
@@ -81,16 +176,15 @@
 
         <hr class="divider" />
 
-        <!-- IDENTIFICACIÓN -->
+        <!-- FOTO IDENTIFICACIÓN -->
         <section class="section-block">
           <h2>2. Foto de identificación</h2>
-          <p class="help">Toma la foto o selecciona un archivo.</p>
+          <p class="help">Toma foto clara de la identificación o súbela desde tus archivos.</p>
 
           <div class="preview-actions">
             <button type="button" id="btnIdCamera" class="btn-secondary small">
               Tomar foto
             </button>
-
             <button type="button" id="btnIdFile" class="btn-secondary small">
               Subir archivo
             </button>
@@ -117,7 +211,6 @@
             <button type="button" id="tabFirmaSubir" class="tab-button active">
               Subir imagen
             </button>
-
             <button type="button" id="tabFirmaDibujar" class="tab-button">
               Dibujar firma
             </button>
@@ -141,7 +234,6 @@
               <button type="button" id="btnLimpiarFirma" class="btn-secondary small">
                 Limpiar
               </button>
-
               <button type="button" id="btnConfirmarFirmaCanvas" class="btn-primary small">
                 Confirmar firma
               </button>
@@ -156,13 +248,15 @@
         </section>
 
         <!-- HIDDEN FIELDS -->
-        <input type="hidden" id="personaPhotoUrl">
-        <input type="hidden" id="idPhotoUrl">
-        <input type="hidden" id="firmaUrl">
+        <input type="hidden" id="personaPhotoUrl" />
+        <input type="hidden" id="idPhotoUrl" />
+        <input type="hidden" id="firmaUrl" />
 
         <div class="form-footer">
           <button type="submit" class="btn-primary full">Enviar por WhatsApp</button>
-          <p class="small-note">Se abrirá WhatsApp con el mensaje listo.</p>
+          <p class="small-note">
+            PRESIONA EN "ENVIAR POR WHATSAPP", TU SOLICITUD SERÁ ASIGNADA AL NUM: 722 560 09 05 DONDE CONTINUARÁS TU TRÁMITE CON ATENCIÓN PERSONALIZADA.
+          </p>
         </div>
       </form>
     </section>
@@ -171,7 +265,7 @@
   <!-- LOADER -->
   <div id="globalLoader" class="global-loader" style="display:none;">
     <div class="loader"></div>
-    <span>Procesando imagen...</span>
+    <span>Procesando imagen, por favor espera...</span>
   </div>
 
   <!-- MODAL CÁMARA -->
@@ -179,7 +273,6 @@
     <div class="camera-box">
       <video id="cameraVideo" autoplay playsinline></video>
       <img id="cameraSilhouette" class="silhouette-overlay" src="/silueta.png" />
-
       <div class="camera-controls">
         <button id="takePhotoBtn" class="btn-primary full">Tomar foto</button>
         <button id="closeCameraBtn" class="btn-secondary full">Cancelar</button>
