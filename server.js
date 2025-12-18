@@ -4,7 +4,6 @@ import fs from "fs";
 import multer from "multer";
 import session from "express-session";
 import { fileURLToPath } from "url";
-import fetch from "node-fetch";
 
 app.get("/api/dhl/locations", async (req, res) => {
   try {
