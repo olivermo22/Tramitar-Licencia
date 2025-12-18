@@ -79,6 +79,12 @@ const closeCameraBtn = document.getElementById("closeCameraBtn");
 let cameraStream = null;
 let cameraCallback = null;
 
+let userLat = null;
+let userLng = null;
+let map = null;
+let markers = [];
+let debounceTimeout = null;
+
 // Estado interno
 let personaUrl = "";
 let idUrl = "";
@@ -93,41 +99,57 @@ if (btnAdmin) {
   });
 }
 
-navigator.geolocation.getCurrentPosition(async pos => {
-  const { latitude, longitude } = pos.coords;
+navigator.geolocation.getCurrentPosition(
+  async (pos) => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    await cargarSucursales(userLat, userLng, true);
+  },
+  () => {
+    alert("Debes permitir el acceso a tu ubicación para mostrar sucursales DHL");
+  }
+);
 
-  const res = await fetch(
-    `/api/dhl/locations?lat=${latitude}&lng=${longitude}`
-  );
+async function cargarSucursales(lat, lng, inicial = false) {
+  const res = await fetch(`/api/dhl/locations?lat=${lat}&lng=${lng}`);
   const data = await res.json();
 
   if (!data.locations || data.locations.length === 0) {
-    alert("No se encontraron sucursales DHL cercanas");
     return;
   }
 
-  initMap(data.locations);
-}, () => {
-  alert("Debes permitir el acceso a tu ubicación para mostrar sucursales DHL");
-});
+  if (inicial) {
+    initMap(lat, lng, data.locations);
+  } else {
+    actualizarMarkers(data.locations);
+  }
+}
 
+function initMap(lat, lng, locations) {
+  map = L.map("map").setView([lat, lng], 14);
 
-function initMap(locations) {
-  const first = locations[0];
-
-  // Crear mapa
-  const map = L.map("map").setView(
-    [first.place.geo.latitude, first.place.geo.longitude],
-    13
-  );
-
-  // Capa OpenStreetMap
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
 
-  // Pines DHL
-  locations.forEach(loc => {
+  actualizarMarkers(locations);
+
+  map.on("moveend", () => {
+    const center = map.getCenter();
+
+    if (debounceTimeout) clearTimeout(debounceTimeout);
+
+    debounceTimeout = setTimeout(() => {
+      cargarSucursales(center.lat, center.lng, false);
+    }, 600);
+  });
+}
+
+function actualizarMarkers(locations) {
+  markers.forEach((m) => map.removeLayer(m));
+  markers = [];
+
+  locations.forEach((loc) => {
     const marker = L.marker([
       loc.place.geo.latitude,
       loc.place.geo.longitude,
@@ -138,22 +160,31 @@ function initMap(locations) {
     marker.on("click", () => {
       seleccionarSucursal(loc);
     });
+
+    markers.push(marker);
   });
 }
 
-
 function seleccionarSucursal(loc) {
-  document.getElementById("sucursalSeleccionada").value = loc.name;
+  const addr = loc.place.address;
 
-  inputEnvioCalle.value = loc.place.address.streetAddress || "";
-  inputEnvioNumero.value = ""; // DHL no siempre da número separado
-  inputEnvioColonia.value = loc.place.address.addressLocality || "";
-  inputEnvioCP.value = loc.place.address.postalCode || "";
+  document.getElementById("sucursalSeleccionada").value =
+    `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+
+  inputEnvioCalle.value = addr.streetAddress || "";
+  inputEnvioNumero.value = "";
+  inputEnvioColonia.value = addr.addressLocality || "";
+  inputEnvioCP.value = addr.postalCode || "";
   inputEnvioCiudadEstado.value =
-    `${loc.place.address.addressLocality}, MX`;
+    `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
 
   document.getElementById("envioSucursalId").value =
     loc.location.ids[0].locationId;
+
+  map.setView(
+    [loc.place.geo.latitude, loc.place.geo.longitude],
+    16
+  );
 }
 
 
