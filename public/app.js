@@ -84,6 +84,8 @@ let userLng = null;
 let map = null;
 let markers = [];
 let debounceTimeout = null;
+let userMarker = null;
+let sucursalPendiente = null;
 
 // Estado interno
 let personaUrl = "";
@@ -132,6 +134,14 @@ function initMap(lat, lng, locations) {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
 
+  // 📍 Marcador de tu ubicación
+  userMarker = L.circleMarker([lat, lng], {
+    radius: 8,
+    color: "#1a73e8",
+    fillColor: "#1a73e8",
+    fillOpacity: 0.9,
+  }).addTo(map);
+
   actualizarMarkers(locations);
 
   map.on("moveend", () => {
@@ -144,6 +154,15 @@ function initMap(lat, lng, locations) {
     }, 600);
   });
 }
+
+document
+  .getElementById("btnCentrarUbicacion")
+  .addEventListener("click", () => {
+    if (!userLat || !userLng || !map) return;
+
+    map.setView([userLat, userLng], 14);
+  });
+
 
 function actualizarMarkers(locations) {
   markers.forEach((m) => map.removeLayer(m));
@@ -166,26 +185,55 @@ function actualizarMarkers(locations) {
 }
 
 function seleccionarSucursal(loc) {
+  sucursalPendiente = loc;
+
   const addr = loc.place.address;
 
-  document.getElementById("sucursalSeleccionada").value =
-    `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+  document.getElementById("modalSucursalNombre").textContent = loc.name;
+  document.getElementById(
+    "modalSucursalDireccion"
+  ).textContent = `${addr.streetAddress}, ${addr.addressLocality}, CP ${addr.postalCode}`;
 
-  inputEnvioCalle.value = addr.streetAddress || "";
-  inputEnvioNumero.value = "";
-  inputEnvioColonia.value = addr.addressLocality || "";
-  inputEnvioCP.value = addr.postalCode || "";
-  inputEnvioCiudadEstado.value =
-    `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
-
-  document.getElementById("envioSucursalId").value =
-    loc.location.ids[0].locationId;
-
-  map.setView(
-    [loc.place.geo.latitude, loc.place.geo.longitude],
-    16
-  );
+  document.getElementById("modalSucursal").classList.remove("hidden");
 }
+
+document
+  .getElementById("btnCancelarSucursal")
+  .addEventListener("click", () => {
+    sucursalPendiente = null;
+    document.getElementById("modalSucursal").classList.add("hidden");
+  });
+
+document
+  .getElementById("btnConfirmarSucursal")
+  .addEventListener("click", () => {
+    if (!sucursalPendiente) return;
+
+    const loc = sucursalPendiente;
+    const addr = loc.place.address;
+
+    document.getElementById("sucursalSeleccionada").value =
+      `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+
+    inputEnvioCalle.value = addr.streetAddress || "";
+    inputEnvioNumero.value = "";
+    inputEnvioColonia.value = addr.addressLocality || "";
+    inputEnvioCP.value = addr.postalCode || "";
+    inputEnvioCiudadEstado.value =
+      `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
+
+    document.getElementById("envioSucursalId").value =
+      loc.location.ids[0].locationId;
+
+    map.setView(
+      [loc.place.geo.latitude, loc.place.geo.longitude],
+      16
+    );
+
+    document.getElementById("modalSucursal").classList.add("hidden");
+    sucursalPendiente = null;
+  });
+
 
 
 // ===============================

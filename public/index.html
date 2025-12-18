@@ -131,6 +131,16 @@
     Elige la sucursal donde se enviará tu trámite.
   </p>
 
+  <button
+  type="button"
+  id="btnCentrarUbicacion"
+  class="btn-secondary"
+  style="margin-bottom:10px;"
+>
+  📍 Centrar en mi ubicación
+</button>
+
+
   <div id="map" style="height:300px;border-radius:12px;"></div>
 
   <div class="field-group">
@@ -286,5 +296,24 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/app.js"></script>
+  
+  <div id="modalSucursal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Confirmar sucursal DHL</h3>
+
+    <p id="modalSucursalNombre" style="font-weight:bold;"></p>
+    <p id="modalSucursalDireccion"></p>
+
+    <div class="modal-actions">
+      <button type="button" id="btnCancelarSucursal" class="btn-secondary">
+        Cancelar
+      </button>
+      <button type="button" id="btnConfirmarSucursal" class="btn-primary">
+        Confirmar sucursal
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
