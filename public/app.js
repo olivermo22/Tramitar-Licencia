@@ -212,10 +212,6 @@ function seleccionarSucursal(loc) {
     loc.place.geo.longitude
   );
 
-  const horarios = loc.openingHours?.map(h =>
-    `${h.dayOfWeek.replace("http://schema.org/", "")}: ${h.opens}–${h.closes}`
-  ).join("<br>") || "Horario no disponible";
-
   const direccionCompleta =
     `${addr.streetAddress}, ${addr.addressLocality}, ` +
     `CP ${addr.postalCode}, ${addr.countryCode || "MX"}`;
@@ -228,7 +224,6 @@ function seleccionarSucursal(loc) {
   document.getElementById("modalSucursalDireccion").innerHTML = `
     <p>${direccionCompleta}</p>
     <p><strong>Distancia:</strong> ${distancia} m</p>
-    <p><strong>Horarios:</strong><br>${horarios}</p>
     <a href="${googleMapsLink}" target="_blank">📍 Ver en Google Maps</a>
   `;
 
@@ -902,14 +897,12 @@ if (form) {
         `SUCURSAL DHL : ${document.getElementById("sucursalSeleccionada").value}`,
         `NOMBRE DESTINATARIO : ${envioNombreDestinatario}`,
         `TELÉFONO DESTINATARIO : ${envioTelefonoDestinatario}`,
-        `📍 Sucursal DHL:\n${sucursalConfirmada.name}\n`,
-        `📌 Ubicación:\n${document.getElementById("envioGoogleMaps").value}\n\n`,
+        `📍 Sucursal DHL: ${sucursalConfirmada.name}`,
+        `📌 Ubicación: ${document.getElementById("envioGoogleMaps").value}`,
         "",
         `FOTO PERSONA : ${baseUrl}${personaUrl}`,
         `FOTO IDENTIFICACION : ${baseUrl}${idUrl}`,
         `FIRMA : ${baseUrl}${firmaUrl}`,
-        "",
-        `PRESIONA EN "ENVIAR POR WHATSAPP", TU SOLICITUD SERÁ ASIGNADA AL NUM: 722 560 09 05 DONDE CONTINUARÁS TU TRÁMITE CON ATENCIÓN PERSONALIZADA.`,
       ];
 
       const text = encodeURIComponent(lineas.join("\n"));
