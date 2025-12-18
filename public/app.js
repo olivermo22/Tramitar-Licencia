@@ -208,46 +208,6 @@ function seleccionarSucursal(loc) {
   document.getElementById("modalSucursal").classList.remove("hidden");
 }
 
-
-document
-  .getElementById("btnCancelarSucursal")
-  .addEventListener("click", () => {
-    sucursalPendiente = null;
-    document.getElementById("modalSucursal").classList.add("hidden");
-  });
-
-document
-  .getElementById("btnConfirmarSucursal")
-  .addEventListener("click", () => {
-    if (!sucursalPendiente) return;
-
-    const loc = sucursalPendiente;
-    const addr = loc.place.address;
-
-    document.getElementById("sucursalSeleccionada").value =
-      `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
-
-    inputEnvioCalle.value = addr.streetAddress || "";
-    inputEnvioNumero.value = "";
-    inputEnvioColonia.value = addr.addressLocality || "";
-    inputEnvioCP.value = addr.postalCode || "";
-    inputEnvioCiudadEstado.value =
-      `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
-
-    document.getElementById("envioSucursalId").value =
-      loc.location.ids[0].locationId;
-
-    map.setView(
-      [loc.place.geo.latitude, loc.place.geo.longitude],
-      16
-    );
-
-    document.getElementById("modalSucursal").classList.add("hidden");
-    sucursalPendiente = null;
-  });
-
-
-
 // ===============================
 // HELPERS UI
 // ===============================
@@ -938,9 +898,9 @@ if (form) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("modalSucursal");
   const btnCancelar = document.getElementById("btnCancelarSucursal");
   const btnConfirmar = document.getElementById("btnConfirmarSucursal");
-  const modal = document.getElementById("modalSucursal");
 
   if (btnCancelar) {
     btnCancelar.addEventListener("click", () => {
@@ -956,9 +916,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const loc = sucursalPendiente;
       const addr = loc.place.address;
 
+      // Mostrar sucursal seleccionada
       document.getElementById("sucursalSeleccionada").value =
-        `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+        `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}, CP ${addr.postalCode}`;
 
+      // Llenar campos ocultos de envío
       inputEnvioCalle.value = addr.streetAddress || "";
       inputEnvioNumero.value = "";
       inputEnvioColonia.value = addr.addressLocality || "";
@@ -969,10 +931,13 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("envioSucursalId").value =
         loc.location.ids[0].locationId;
 
-      map.setView(
-        [loc.place.geo.latitude, loc.place.geo.longitude],
-        16
-      );
+      // Centrar mapa en la sucursal
+      if (map) {
+        map.setView(
+          [loc.place.geo.latitude, loc.place.geo.longitude],
+          16
+        );
+      }
 
       modal.classList.add("hidden");
       sucursalPendiente = null;
