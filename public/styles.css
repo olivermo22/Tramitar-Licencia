@@ -506,3 +506,17 @@ button {
     transform: scale(1);
   }
 }
+
+.btn-whatsapp {
+  background: #25d366;
+  color: #fff;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-whatsapp:hover {
+  background: #1ebe5d;
+}

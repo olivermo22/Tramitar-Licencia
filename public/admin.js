@@ -128,12 +128,56 @@ function renderForms(forms) {
 
     // Comentarios
     const tdComentarios = document.createElement("td");
-    tdComentarios.textContent = f.comentarios || "";
-    tr.appendChild(tdComentarios);
+
+    const btnReenviar = document.createElement("button");
+    btnReenviar.textContent = "📲 Reenviar WhatsApp";
+    btnReenviar.className = "btn-whatsapp";
+
+btnReenviar.addEventListener("click", () => {
+  const mensaje = construirMensajeWhatsApp(f);
+  const text = encodeURIComponent(mensaje);
+  const waUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${text}`;
+  window.open(waUrl, "_blank");
+});
+
+ tdComentarios.appendChild(btnReenviar);
+
 
     formsBody.appendChild(tr);
   }
 }
+
+function construirMensajeWhatsApp(f) {
+  const lineas = [
+    "SOLICITUD LICENCIA DE CONDUCIR",
+    `Respuesta #${f.folio || f.id || ""}`,
+    "",
+    `NUM TELEFONO : ${f.telefono || ""}`,
+    `TIPO DE LICENCIA : ${f.tipoLicencia || ""}`,
+    `VALIDA POR : ${f.vigencia || ""}`,
+    `NOMBRE COMPLETO : ${f.nombreCompleto || ""}`,
+    `CURP : ${f.curp || ""}`,
+    `DOMICILIO DE GUERRERO ACEPTADO : ${f.domicilioGuerrero || ""}`,
+    `ALERGIAS/RESTRICCIONES : ${f.alergias || "Ninguna"}`,
+    `TIPO DE SANGRE : ${f.tipoSangre || ""}`,
+    `CONTACTO DE EMERGENCIA : ${f.emergenciaNombre || ""} ${f.emergenciaTelefono || ""}`,
+    "",
+    "DATOS DE ENVÍO",
+    `SUCURSAL DHL : ${f.sucursalNombre || ""}`,
+    `NOMBRE DESTINATARIO : ${f.envioNombreDestinatario || ""}`,
+    `TELÉFONO DESTINATARIO : ${f.envioTelefonoDestinatario || ""}`,
+    "",
+    "📍 UBICACIÓN SUCURSAL DHL",
+    f.sucursalGoogleMaps || "",
+    "",
+    f.fotoPersona ? `FOTO PERSONA : ${location.origin}${f.fotoPersona}` : "",
+    f.fotoIdentificacion ? `FOTO IDENTIFICACION : ${location.origin}${f.fotoIdentificacion}` : "",
+    f.firma ? `FIRMA : ${location.origin}${f.firma}` : "",
+  ];
+
+  return lineas.filter(Boolean).join("\n");
+}
+
 
 // Cargar al entrar
 loadForms();
