@@ -101,38 +101,46 @@ navigator.geolocation.getCurrentPosition(async pos => {
   );
   const data = await res.json();
 
-  initMap(data.locations);
-});
-
-function initMap(locations) {
-  if (!locations || locations.length === 0) {
-    alert("No se encontraron sucursales DHL cercanas.");
+  if (!data.locations || data.locations.length === 0) {
+    alert("No se encontraron sucursales DHL cercanas");
     return;
   }
 
-  const map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 13,
-    center: {
-      lat: locations[0].place.geo.latitude,
-      lng: locations[0].place.geo.longitude
-    }
-  });
+  initMap(data.locations);
+}, () => {
+  alert("Debes permitir el acceso a tu ubicación para mostrar sucursales DHL");
+});
 
+
+function initMap(locations) {
+  const first = locations[0];
+
+  // Crear mapa
+  const map = L.map("map").setView(
+    [first.place.geo.latitude, first.place.geo.longitude],
+    13
+  );
+
+  // Capa OpenStreetMap
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+  }).addTo(map);
+
+  // Pines DHL
   locations.forEach(loc => {
-    const marker = new google.maps.Marker({
-      position: {
-        lat: loc.place.geo.latitude,
-        lng: loc.place.geo.longitude
-      },
-      map,
-      title: loc.name
-    });
+    const marker = L.marker([
+      loc.place.geo.latitude,
+      loc.place.geo.longitude,
+    ]).addTo(map);
 
-    marker.addListener("click", () => {
+    marker.bindPopup(`<b>${loc.name}</b>`);
+
+    marker.on("click", () => {
       seleccionarSucursal(loc);
     });
   });
 }
+
 
 function seleccionarSucursal(loc) {
   document.getElementById("sucursalSeleccionada").value = loc.name;
