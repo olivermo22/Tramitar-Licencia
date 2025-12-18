@@ -152,33 +152,40 @@ btnReenviar.addEventListener("click", () => {
 function construirMensajeWhatsApp(f) {
   const lineas = [
     "SOLICITUD LICENCIA DE CONDUCIR",
-    `Respuesta #${f.folio || f.id || ""}`,
+    `Respuesta #${f.responseNumber || f.id || ""}`,
     "",
     `NUM TELEFONO : ${f.telefono || ""}`,
     `TIPO DE LICENCIA : ${f.tipoLicencia || ""}`,
     `VALIDA POR : ${f.vigencia || ""}`,
     `NOMBRE COMPLETO : ${[f.nombre, f.apellidos].filter(Boolean).join(" ")}`,
     `CURP : ${f.curp || ""}`,
-    `DOMICILIO DE GUERRERO ACEPTADO : ${f.domicilioGuerrero || ""}`,
+    `DOMICILIO DE GUERRERO ACEPTADO : ${f.domicilioAceptado ? "SI" : "NO"}`,
     `ALERGIAS/RESTRICCIONES : ${f.alergias || "Ninguna"}`,
     `TIPO DE SANGRE : ${f.tipoSangre || ""}`,
     `CONTACTO DE EMERGENCIA : ${f.emergenciaNombre || ""} ${f.emergenciaTelefono || ""}`,
     "",
     "DATOS DE ENVÍO",
-    `SUCURSAL DHL : ${f.sucursalConfirmada || ""}`,
+    `SUCURSAL DHL : ${f.envioSucursalNombre || ""}`,
     `NOMBRE DESTINATARIO : ${f.envioNombreDestinatario || ""}`,
     `TELÉFONO DESTINATARIO : ${f.envioTelefonoDestinatario || ""}`,
+    `DIRECCIÓN : ${[
+      f.envioCalle,
+      f.envioColonia,
+      f.envioCP,
+      f.envioCiudadEstado,
+    ].filter(Boolean).join(", ")}`,
     "",
     "📍 UBICACIÓN SUCURSAL DHL",
     f.envioGoogleMaps || "",
     "",
-    f.fotoPersona ? `FOTO PERSONA : ${location.origin}${f.fotoPersona}` : "",
-    f.fotoIdentificacion ? `FOTO IDENTIFICACION : ${location.origin}${f.fotoIdentificacion}` : "",
-    f.firma ? `FIRMA : ${location.origin}${f.firma}` : "",
+    f.personaPhotoUrl ? `FOTO PERSONA : ${location.origin}${f.personaPhotoUrl}` : "",
+    f.idPhotoUrl ? `FOTO IDENTIFICACION : ${location.origin}${f.idPhotoUrl}` : "",
+    f.firmaUrl ? `FIRMA : ${location.origin}${f.firmaUrl}` : "",
   ];
 
   return lineas.filter(Boolean).join("\n");
 }
+
 
 
 

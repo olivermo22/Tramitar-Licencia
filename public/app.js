@@ -754,7 +754,7 @@ if (form) {
     const envioCiudadEstado = inputEnvioCiudadEstado.value.trim();
     const envioSucursalId = document.getElementById("envioSucursalId").value;
     const envioSucursalNombre = document.getElementById("sucursalSeleccionada").value;
-  
+    const envioGoogleMaps = document.getElementById("envioGoogleMaps").value;  
 
 
 
@@ -818,6 +818,7 @@ if (form) {
       alert("Falta la firma.");
       return;
     }
+    
 
     const payload = {
       nombre,
@@ -840,6 +841,7 @@ if (form) {
       envioCiudadEstado,
       envioSucursalId,
       envioSucursalNombre,
+      envioGoogleMaps,
       personaPhotoUrl: personaUrl,
       idPhotoUrl: idUrl,
       firmaUrl,
