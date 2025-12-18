@@ -86,6 +86,7 @@ let markers = [];
 let debounceTimeout = null;
 let userMarker = null;
 let sucursalPendiente = null;
+let sucursalConfirmada = null;
 
 // Estado interno
 let personaUrl = "";
@@ -185,28 +186,55 @@ function actualizarMarkers(locations) {
   });
 }
 
+function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+
+  return Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 function seleccionarSucursal(loc) {
   sucursalPendiente = loc;
 
   const addr = loc.place.address;
 
+  const distancia = calcularDistanciaMetros(
+    userLat,
+    userLng,
+    loc.place.geo.latitude,
+    loc.place.geo.longitude
+  );
+
+  const horarios = loc.openingHours?.map(h =>
+    `${h.dayOfWeek.replace("http://schema.org/", "")}: ${h.opens}–${h.closes}`
+  ).join("<br>") || "Horario no disponible";
+
   const direccionCompleta =
-    `${addr.streetAddress}, ` +
-    `${addr.addressLocality}, ` +
-    `${addr.countryCode || "MX"}, ` +
-    `CP ${addr.postalCode}`;
+    `${addr.streetAddress}, ${addr.addressLocality}, ` +
+    `CP ${addr.postalCode}, ${addr.countryCode || "MX"}`;
 
   const googleMapsLink =
-    `https://www.google.com/maps?q=` +
-    `${loc.place.geo.latitude},${loc.place.geo.longitude}`;
+    `https://www.google.com/maps?q=${loc.place.geo.latitude},${loc.place.geo.longitude}`;
 
   document.getElementById("modalSucursalNombre").textContent = loc.name;
-  document.getElementById("modalSucursalDireccion").innerHTML =
-    `${direccionCompleta}<br>` +
-    `<a href="${googleMapsLink}" target="_blank">📍 Ver en Google Maps</a>`;
+
+  document.getElementById("modalSucursalDireccion").innerHTML = `
+    <p>${direccionCompleta}</p>
+    <p><strong>Distancia:</strong> ${distancia} m</p>
+    <p><strong>Horarios:</strong><br>${horarios}</p>
+    <a href="${googleMapsLink}" target="_blank">📍 Ver en Google Maps</a>
+  `;
 
   document.getElementById("modalSucursal").classList.remove("hidden");
 }
+
 
 // ===============================
 // HELPERS UI
@@ -778,6 +806,10 @@ if (form) {
       return;
     }
 
+    if (!sucursalConfirmada) {
+      alert("Debes confirmar una sucursal DHL antes de continuar");
+      return;
+    }
 
     if (!personaUrl) {
       alert("Falta la foto de la persona.");
@@ -870,11 +902,8 @@ if (form) {
         `SUCURSAL DHL : ${document.getElementById("sucursalSeleccionada").value}`,
         `NOMBRE DESTINATARIO : ${envioNombreDestinatario}`,
         `TELÉFONO DESTINATARIO : ${envioTelefonoDestinatario}`,
-        `CALLE : ${envioCalle}`,
-        `NÚMERO : ${envioNumero}`,
-        `COLONIA : ${envioColonia}`,
-        `CP : ${envioCP}`,
-        `CIUDAD Y ESTADO : ${envioCiudadEstado}`,
+        `📍 Sucursal DHL:\n${sucursalConfirmada.name}\n`,
+        `📌 Ubicación:\n${document.getElementById("envioGoogleMaps").value}\n\n`,
         "",
         `FOTO PERSONA : ${baseUrl}${personaUrl}`,
         `FOTO IDENTIFICACION : ${baseUrl}${idUrl}`,
@@ -911,36 +940,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnConfirmar) {
     btnConfirmar.addEventListener("click", () => {
-      if (!sucursalPendiente) return;
+  if (!sucursalPendiente) return;
 
-      const loc = sucursalPendiente;
-      const addr = loc.place.address;
+  const loc = sucursalPendiente;
+  const addr = loc.place.address;
 
-      // Mostrar sucursal seleccionada
-      document.getElementById("sucursalSeleccionada").value =
-        `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}, CP ${addr.postalCode}`;
+  sucursalConfirmada = loc;
 
-      // Llenar campos ocultos de envío
-      inputEnvioCalle.value = addr.streetAddress || "";
-      inputEnvioNumero.value = "";
-      inputEnvioColonia.value = addr.addressLocality || "";
-      inputEnvioCP.value = addr.postalCode || "";
-      inputEnvioCiudadEstado.value =
-        `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
+  document.getElementById("sucursalSeleccionada").value =
+    `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
 
-      document.getElementById("envioSucursalId").value =
-        loc.location.ids[0].locationId;
+  inputEnvioCalle.value = addr.streetAddress || "";
+  inputEnvioColonia.value = addr.addressLocality || "";
+  inputEnvioCP.value = addr.postalCode || "";
+  inputEnvioCiudadEstado.value =
+    `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
 
-      // Centrar mapa en la sucursal
-      if (map) {
-        map.setView(
-          [loc.place.geo.latitude, loc.place.geo.longitude],
-          16
-        );
-      }
+  document.getElementById("envioSucursalId").value =
+    loc.location.ids[0].locationId;
 
-      modal.classList.add("hidden");
-      sucursalPendiente = null;
-    });
+  document.getElementById("envioGoogleMaps").value =
+    `https://www.google.com/maps?q=${loc.place.geo.latitude},${loc.place.geo.longitude}`;
+
+  modal.classList.add("hidden");
+  sucursalPendiente = null;
+});
   }
 });
