@@ -904,6 +904,7 @@ if (form) {
         `FOTO IDENTIFICACION : ${baseUrl}${idUrl}`,
         `FIRMA : ${baseUrl}${firmaUrl}`,
       ];
+      const mensajeWhatsApp = lineas.join("\n");
 
       const text = encodeURIComponent(lineas.join("\n"));
       const waUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${text}`;
