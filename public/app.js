@@ -87,6 +87,11 @@ let debounceTimeout = null;
 let userMarker = null;
 let sucursalPendiente = null;
 let sucursalConfirmada = null;
+let ultimoCentroConsultado = null;
+let ultimoRequestSucursales = 0;
+
+const DEFAULT_MAP_CENTER = { lat: 17.4392, lng: -99.5451 };
+const btnCentrarUbicacion = document.getElementById("btnCentrarUbicacion");
 
 // Estado interno
 let personaUrl = "";
@@ -102,48 +107,26 @@ if (btnAdmin) {
   });
 }
 
-navigator.geolocation.getCurrentPosition(
-  async (pos) => {
-    userLat = pos.coords.latitude;
-    userLng = pos.coords.longitude;
-    await cargarSucursales(userLat, userLng, true);
-  },
-  () => {
-    alert("Debes permitir el acceso a tu ubicación para mostrar sucursales DHL");
-  }
-);
-
-async function cargarSucursales(lat, lng, inicial = false) {
-  const res = await fetch(`/api/dhl/locations?lat=${lat}&lng=${lng}`);
-  const data = await res.json();
-
-  if (!data.locations || data.locations.length === 0) {
+function asegurarMapaBase(lat = DEFAULT_MAP_CENTER.lat, lng = DEFAULT_MAP_CENTER.lng) {
+  if (map) {
+    requestAnimationFrame(() => map.invalidateSize());
     return;
   }
 
-  if (inicial) {
-    initMap(lat, lng, data.locations);
-  } else {
-    actualizarMarkers(data.locations);
-  }
-}
-
-function initMap(lat, lng, locations) {
-  map = L.map("map").setView([lat, lng], 13); // 👈 más alejado
+  map = L.map("map", {
+    preferCanvas: true,
+  }).setView([lat, lng], userLat && userLng ? 14 : 6);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
 
-  // 📍 marcador de ubicación actual
   userMarker = L.circleMarker([lat, lng], {
     radius: 8,
     color: "#1a73e8",
     fillColor: "#1a73e8",
     fillOpacity: 0.9,
   }).addTo(map);
-
-  actualizarMarkers(locations);
 
   map.on("moveend", () => {
     const center = map.getCenter();
@@ -154,20 +137,134 @@ function initMap(lat, lng, locations) {
       cargarSucursales(center.lat, center.lng, false);
     }, 600);
   });
+
+  requestAnimationFrame(() => map.invalidateSize());
 }
 
+function actualizarUbicacionUsuario(lat, lng) {
+  userLat = lat;
+  userLng = lng;
 
-document
-  .getElementById("btnCentrarUbicacion")
-  .addEventListener("click", () => {
-    if (!userLat || !userLng || !map) return;
+  asegurarMapaBase(lat, lng);
 
-    map.setView([userLat, userLng], 14);
+  if (userMarker) {
+    userMarker.setLatLng([lat, lng]);
+  }
+
+  map.setView([lat, lng], 14);
+  requestAnimationFrame(() => map.invalidateSize());
+}
+
+async function obtenerUbicacionUsuario() {
+  if (!navigator.geolocation) {
+    throw new Error("Tu navegador no soporta geolocalización.");
+  }
+
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000,
+    });
   });
+}
 
+async function centrarEnUbicacionUsuario() {
+  try {
+    const pos = await obtenerUbicacionUsuario();
+    actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
+    await cargarSucursales(userLat, userLng, false);
+  } catch (error) {
+    console.error("No fue posible obtener la ubicación del usuario:", error);
+  }
+}
+
+async function iniciarMapa() {
+  asegurarMapaBase();
+  try {
+    const pos = await obtenerUbicacionUsuario();
+    actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
+    await cargarSucursales(userLat, userLng, true);
+  } catch (error) {
+    console.error("Error inicializando el mapa con geolocalización:", error);
+    await cargarSucursales(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng, true);
+  }
+}
+
+async function cargarSucursales(lat, lng, inicial = false) {
+  asegurarMapaBase(lat, lng);
+
+  const mismoCentro =
+    ultimoCentroConsultado &&
+    Math.abs(ultimoCentroConsultado.lat - lat) < 0.0001 &&
+    Math.abs(ultimoCentroConsultado.lng - lng) < 0.0001;
+
+  if (!inicial && mismoCentro) {
+    return;
+  }
+
+  ultimoCentroConsultado = { lat, lng };
+  const requestId = ++ultimoRequestSucursales;
+
+  try {
+    const res = await fetch(`/api/dhl/locations?lat=${lat}&lng=${lng}`);
+    const data = await res.json();
+
+    if (requestId !== ultimoRequestSucursales) {
+      return;
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.error || "No fue posible consultar las sucursales.");
+    }
+
+    if (!Array.isArray(data.locations) || data.locations.length === 0) {
+      actualizarMarkers([]);
+      return;
+    }
+
+    actualizarMarkers(data.locations);
+  } catch (error) {
+    console.error("Error cargando sucursales DHL:", error);
+
+    if (requestId !== ultimoRequestSucursales) {
+      return;
+    }
+
+  }
+}
+
+if (btnCentrarUbicacion) {
+  btnCentrarUbicacion.addEventListener("click", async () => {
+    if (userLat && userLng && map) {
+      map.setView([userLat, userLng], 14);
+      requestAnimationFrame(() => map.invalidateSize());
+      await cargarSucursales(userLat, userLng, false);
+      return;
+    }
+
+    await centrarEnUbicacionUsuario();
+  });
+}
+
+window.addEventListener("resize", () => {
+  if (!map) return;
+  requestAnimationFrame(() => map.invalidateSize());
+});
+
+window.addEventListener("orientationchange", () => {
+  if (!map) return;
+  setTimeout(() => map.invalidateSize(), 300);
+});
 
 function actualizarMarkers(locations) {
-  markers.forEach((m) => map.removeLayer(m));
+  if (!map) return;
+
+  markers.forEach((marker) => {
+    if (map.hasLayer(marker)) {
+      map.removeLayer(marker);
+    }
+  });
   markers = [];
 
   locations.forEach((loc) => {
@@ -205,12 +302,15 @@ function seleccionarSucursal(loc) {
 
   const addr = loc.place.address;
 
-  const distancia = calcularDistanciaMetros(
-    userLat,
-    userLng,
-    loc.place.geo.latitude,
-    loc.place.geo.longitude
-  );
+  const distancia =
+    userLat !== null && userLng !== null
+      ? calcularDistanciaMetros(
+          userLat,
+          userLng,
+          loc.place.geo.latitude,
+          loc.place.geo.longitude
+        )
+      : null;
 
   const direccionCompleta =
     `${addr.streetAddress}, ${addr.addressLocality}, ` +
@@ -223,8 +323,12 @@ function seleccionarSucursal(loc) {
 
   document.getElementById("modalSucursalDireccion").innerHTML = `
     <p>${direccionCompleta}</p>
-    <p><strong>Distancia:</strong> ${distancia} m</p>
-    <a href="${googleMapsLink}" target="_blank">📍 Ver en Google Maps</a>
+    ${
+      distancia !== null
+        ? `<p><strong>Distancia:</strong> ${distancia} m</p>`
+        : ""
+    }
+    <a href="${googleMapsLink}" target="_blank" rel="noopener noreferrer">📍 Ver en Google Maps</a>
   `;
 
   document.getElementById("modalSucursal").classList.remove("hidden");
@@ -923,6 +1027,8 @@ if (form) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  iniciarMapa();
+
   const modal = document.getElementById("modalSucursal");
   const btnCancelar = document.getElementById("btnCancelarSucursal");
   const btnConfirmar = document.getElementById("btnConfirmarSucursal");
@@ -936,30 +1042,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnConfirmar) {
     btnConfirmar.addEventListener("click", () => {
-  if (!sucursalPendiente) return;
+      if (!sucursalPendiente) return;
 
-  const loc = sucursalPendiente;
-  const addr = loc.place.address;
+      const loc = sucursalPendiente;
+      const addr = loc.place.address;
 
-  sucursalConfirmada = loc;
+      sucursalConfirmada = loc;
 
-  document.getElementById("sucursalSeleccionada").value =
-    `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
+      document.getElementById("sucursalSeleccionada").value =
+        `${loc.name} – ${addr.streetAddress}, ${addr.addressLocality}`;
 
-  inputEnvioCalle.value = addr.streetAddress || "";
-  inputEnvioColonia.value = addr.addressLocality || "";
-  inputEnvioCP.value = addr.postalCode || "";
-  inputEnvioCiudadEstado.value =
-    `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
+      inputEnvioCalle.value = addr.streetAddress || "";
+      inputEnvioColonia.value = addr.addressLocality || "";
+      inputEnvioCP.value = addr.postalCode || "";
+      inputEnvioCiudadEstado.value =
+        `${addr.addressLocality}, ${addr.countryCode || "MX"}`;
 
-  document.getElementById("envioSucursalId").value =
-    loc.location.ids[0].locationId;
+      document.getElementById("envioSucursalId").value =
+        loc.location.ids[0].locationId;
 
-  document.getElementById("envioGoogleMaps").value =
-    `https://www.google.com/maps?q=${loc.place.geo.latitude},${loc.place.geo.longitude}`;
+      document.getElementById("envioGoogleMaps").value =
+        `https://www.google.com/maps?q=${loc.place.geo.latitude},${loc.place.geo.longitude}`;
 
-  modal.classList.add("hidden");
-  sucursalPendiente = null;
-});
+      modal.classList.add("hidden");
+      sucursalPendiente = null;
+    });
   }
 });

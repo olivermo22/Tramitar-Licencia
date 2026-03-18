@@ -18,6 +18,7 @@
 
   <main class="page">
     <section class="card">
+      <div class="hero-badge">Trámite digital seguro</div>
       <h1>Solicitud de trámite</h1>
       <p class="subtitle">
         Completa tus datos y adjunta la información requerida. Al final se abrirá WhatsApp con el mensaje listo para enviar.
@@ -125,23 +126,22 @@
 
           <hr class="divider" />
 
-<section class="section-block">
-  <h2>Selecciona la sucursal DHL más cercana</h2>
-  <p class="help">
-    Elige la sucursal donde se enviará tu trámite.
-  </p>
+<section class="section-block map-section">
+  <div class="section-heading">
+    <div>
+      <h2>Selecciona la sucursal DHL más conveniente</h2>
+      <p class="help">Explora el mapa libremente y elige la sucursal donde se enviará tu trámite.</p>
+    </div>
+    <button
+      type="button"
+      id="btnCentrarUbicacion"
+      class="btn-secondary"
+    >
+      📍 Centrar en mi ubicación
+    </button>
+  </div>
 
-  <button
-  type="button"
-  id="btnCentrarUbicacion"
-  class="btn-secondary"
-  style="margin-bottom:10px;"
->
-  📍 Centrar en mi ubicación
-</button>
-
-
-  <div id="map" style="height:300px;border-radius:12px;"></div>
+  <div id="map" class="map-canvas"></div>
 
   <div class="field-group">
     <label>Sucursal seleccionada</label>
