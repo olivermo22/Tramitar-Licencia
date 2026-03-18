@@ -92,7 +92,6 @@ let ultimoRequestSucursales = 0;
 
 const DEFAULT_MAP_CENTER = { lat: 17.4392, lng: -99.5451 };
 const btnCentrarUbicacion = document.getElementById("btnCentrarUbicacion");
-const mapStatus = document.getElementById("mapStatus");
 
 // Estado interno
 let personaUrl = "";
@@ -108,16 +107,8 @@ if (btnAdmin) {
   });
 }
 
-function actualizarEstadoMapa(message = "", type = "info") {
-  if (!mapStatus) return;
-
-  mapStatus.textContent = message;
-  mapStatus.className = message ? `map-status ${type}` : "map-status hidden";
-}
-
 function asegurarMapaBase(lat = DEFAULT_MAP_CENTER.lat, lng = DEFAULT_MAP_CENTER.lng) {
   if (map) {
-    map.setView([lat, lng], userLat && userLng ? 14 : 6);
     requestAnimationFrame(() => map.invalidateSize());
     return;
   }
@@ -179,36 +170,23 @@ async function obtenerUbicacionUsuario() {
 }
 
 async function centrarEnUbicacionUsuario() {
-  actualizarEstadoMapa("Ubicando tu posición actual...", "info");
-
   try {
     const pos = await obtenerUbicacionUsuario();
     actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
     await cargarSucursales(userLat, userLng, false);
   } catch (error) {
     console.error("No fue posible obtener la ubicación del usuario:", error);
-    actualizarEstadoMapa(
-      "No pudimos obtener tu ubicación. Puedes mover el mapa manualmente y volver a intentar.",
-      "warning"
-    );
   }
 }
 
 async function iniciarMapa() {
   asegurarMapaBase();
-  actualizarEstadoMapa("Cargando mapa y sucursales cercanas...", "info");
-
   try {
     const pos = await obtenerUbicacionUsuario();
     actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
     await cargarSucursales(userLat, userLng, true);
   } catch (error) {
     console.error("Error inicializando el mapa con geolocalización:", error);
-    actualizarEstadoMapa(
-      "No pudimos acceder a tu ubicación. Puedes mover el mapa manualmente o usar el botón para reintentar.",
-      "warning"
-    );
-
     await cargarSucursales(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng, true);
   }
 }
@@ -227,7 +205,6 @@ async function cargarSucursales(lat, lng, inicial = false) {
 
   ultimoCentroConsultado = { lat, lng };
   const requestId = ++ultimoRequestSucursales;
-  actualizarEstadoMapa("Buscando sucursales DHL cercanas...", "info");
 
   try {
     const res = await fetch(`/api/dhl/locations?lat=${lat}&lng=${lng}`);
@@ -243,18 +220,10 @@ async function cargarSucursales(lat, lng, inicial = false) {
 
     if (!Array.isArray(data.locations) || data.locations.length === 0) {
       actualizarMarkers([]);
-      actualizarEstadoMapa(
-        "No encontramos sucursales para esta zona. Mueve el mapa o vuelve a centrar tu ubicación.",
-        "warning"
-      );
       return;
     }
 
     actualizarMarkers(data.locations);
-    actualizarEstadoMapa(
-      `${data.locations.length} sucursales disponibles en esta zona.`,
-      "success"
-    );
   } catch (error) {
     console.error("Error cargando sucursales DHL:", error);
 
@@ -262,10 +231,6 @@ async function cargarSucursales(lat, lng, inicial = false) {
       return;
     }
 
-    actualizarEstadoMapa(
-      "No fue posible cargar las sucursales DHL. Revisa tu conexión e inténtalo de nuevo.",
-      "error"
-    );
   }
 }
 
