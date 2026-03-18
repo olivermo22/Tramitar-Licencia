@@ -136,26 +136,49 @@ app.post("/api/logout", (req, res) => {
 app.get("/api/dhl/locations", async (req, res) => {
   try {
     const { lat, lng } = req.query;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
 
-    if (!lat || !lng) {
-      return res.status(400).json({ error: "Lat/Lng requeridos" });
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return res.status(400).json({ error: "Lat/Lng válidos requeridos" });
+    }
+
+    if (!process.env.DHL_API_KEY) {
+      return res.status(503).json({
+        error: "La integración con DHL no está configurada en el servidor.",
+      });
     }
 
     const url =
       `https://api.dhl.com/location-finder/v1/find-by-geo` +
-      `?latitude=${lat}&longitude=${lng}&radius=5000&limit=10`;
+      `?latitude=${latitude}&longitude=${longitude}&radius=5000&limit=10`;
 
     const r = await fetch(url, {
       headers: {
         "DHL-API-Key": process.env.DHL_API_KEY,
       },
+      signal: AbortSignal.timeout(10000),
     });
 
     const data = await r.json();
+
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: data?.detail || data?.title || "Error consultando DHL",
+        details: data,
+      });
+    }
+
     res.json(data);
   } catch (err) {
     console.error("DHL error:", err);
-    res.status(500).json({ error: "Error consultando DHL" });
+    const status = err.name === "TimeoutError" ? 504 : 500;
+    res.status(status).json({
+      error:
+        status === 504
+          ? "Tiempo de espera agotado consultando DHL"
+          : "Error consultando DHL",
+    });
   }
 });
 
