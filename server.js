@@ -14,6 +14,16 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "admin123";
 const SESSION_SECRET = process.env.SESSION_SECRET || "clave-secreta";
+const DHL_CACHE_TTL_MS = Number(process.env.DHL_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+const DHL_MIN_REQUEST_INTERVAL_MS = Number(process.env.DHL_MIN_REQUEST_INTERVAL_MS || 1000);
+const DHL_REQUEST_TIMEOUT_MS = Number(process.env.DHL_REQUEST_TIMEOUT_MS || 10000);
+const DHL_SEARCH_RADIUS = Number(process.env.DHL_SEARCH_RADIUS || 5000);
+const DHL_SEARCH_LIMIT = Number(process.env.DHL_SEARCH_LIMIT || 10);
+
+const dhlLocationCache = new Map();
+const dhlInFlightRequests = new Map();
+let dhlRequestQueue = Promise.resolve();
+let dhlLastGlobalRequestAt = 0;
 
 // === RUTAS DE DIRECTORIOS ===
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -109,6 +119,79 @@ function getNextResponseNumber() {
   return current;
 }
 
+function roundCoordinate(value, decimals = 3) {
+  return Number(value.toFixed(decimals));
+}
+
+function buildDhlSearchKey({ latitude, longitude, radius = DHL_SEARCH_RADIUS, country = "MX" }) {
+  return JSON.stringify({
+    lat: roundCoordinate(latitude, 3),
+    lng: roundCoordinate(longitude, 3),
+    radius: Number(radius) || DHL_SEARCH_RADIUS,
+    country: String(country || "MX").trim().toUpperCase(),
+  });
+}
+
+function getCachedDhlEntry(searchKey) {
+  const entry = dhlLocationCache.get(searchKey);
+
+  if (!entry) return null;
+
+  if (entry.expiresAt <= Date.now()) {
+    dhlLocationCache.delete(searchKey);
+    return null;
+  }
+
+  return entry;
+}
+
+function setCachedDhlEntry(searchKey, payload) {
+  const entry = {
+    payload,
+    storedAt: Date.now(),
+    expiresAt: Date.now() + DHL_CACHE_TTL_MS,
+  };
+
+  dhlLocationCache.set(searchKey, entry);
+  return entry;
+}
+
+function logDhlEvent(event, meta = {}) {
+  console.log(`[dhl/locations] ${event}`, meta);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function enqueueGlobalDhlRequest(task, meta = {}) {
+  const previousQueue = dhlRequestQueue;
+  let releaseQueue;
+
+  dhlRequestQueue = new Promise((resolve) => {
+    releaseQueue = resolve;
+  });
+
+  await previousQueue;
+
+  try {
+    const elapsed = Date.now() - dhlLastGlobalRequestAt;
+
+    if (elapsed < DHL_MIN_REQUEST_INTERVAL_MS) {
+      const waitMs = DHL_MIN_REQUEST_INTERVAL_MS - elapsed;
+      logDhlEvent("global rate limit wait", { waitMs, ...meta });
+      await delay(waitMs);
+    }
+
+    dhlLastGlobalRequestAt = Date.now();
+    logDhlEvent("dhl request sent", meta);
+
+    return await task();
+  } finally {
+    releaseQueue();
+  }
+}
+
 // =========================
 //   AUTH
 // =========================
@@ -135,9 +218,10 @@ app.post("/api/logout", (req, res) => {
 
 app.get("/api/dhl/locations", async (req, res) => {
   try {
-    const { lat, lng } = req.query;
+    const { lat, lng, radius = DHL_SEARCH_RADIUS, country = "MX" } = req.query;
     const latitude = Number(lat);
     const longitude = Number(lng);
+    const normalizedRadius = Number(radius) || DHL_SEARCH_RADIUS;
 
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return res.status(400).json({ error: "Lat/Lng válidos requeridos" });
@@ -149,35 +233,142 @@ app.get("/api/dhl/locations", async (req, res) => {
       });
     }
 
-    const url =
-      `https://api.dhl.com/location-finder/v1/find-by-geo` +
-      `?latitude=${latitude}&longitude=${longitude}&radius=5000&limit=10`;
-
-    const r = await fetch(url, {
-      headers: {
-        "DHL-API-Key": process.env.DHL_API_KEY,
-      },
-      signal: AbortSignal.timeout(10000),
+    const searchKey = buildDhlSearchKey({
+      latitude,
+      longitude,
+      radius: normalizedRadius,
+      country,
     });
 
-    const data = await r.json();
-
-    if (!r.ok) {
-      return res.status(r.status).json({
-        error: data?.detail || data?.title || "Error consultando DHL",
-        details: data,
+    const cachedEntry = getCachedDhlEntry(searchKey);
+    if (cachedEntry) {
+      logDhlEvent("cache hit", { searchKey });
+      return res.json({
+        ...cachedEntry.payload,
+        meta: {
+          ...(cachedEntry.payload.meta || {}),
+          cache: "hit",
+          cachedAt: cachedEntry.storedAt,
+        },
       });
     }
 
-    res.json(data);
+    logDhlEvent("cache miss", { searchKey });
+
+    if (dhlInFlightRequests.has(searchKey)) {
+      logDhlEvent("request deduplicated", { searchKey });
+
+      try {
+        const sharedPayload = await dhlInFlightRequests.get(searchKey);
+        return res.json({
+          ...sharedPayload,
+          meta: {
+            ...(sharedPayload.meta || {}),
+            deduplicated: true,
+          },
+        });
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          logDhlEvent("aborted request", { searchKey, source: "deduplicated" });
+          return res.status(499).json({ error: "Consulta cancelada" });
+        }
+
+        throw error;
+      }
+    }
+
+    const dhlRequestPromise = (async () => {
+      const url =
+        `https://api.dhl.com/location-finder/v1/find-by-geo` +
+        `?latitude=${latitude}&longitude=${longitude}&radius=${normalizedRadius}&limit=${DHL_SEARCH_LIMIT}`;
+
+      const payload = await enqueueGlobalDhlRequest(async () => {
+        const response = await fetch(url, {
+          headers: {
+            "DHL-API-Key": process.env.DHL_API_KEY,
+          },
+          signal: AbortSignal.timeout(DHL_REQUEST_TIMEOUT_MS),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          const error = new Error(data?.detail || data?.title || "Error consultando DHL");
+          error.status = response.status;
+          error.details = data;
+          throw error;
+        }
+
+        return {
+          ...data,
+          meta: {
+            cache: "miss",
+            searchKey,
+          },
+        };
+      }, { searchKey, url });
+
+      setCachedDhlEntry(searchKey, payload);
+      return payload;
+    })();
+
+    dhlInFlightRequests.set(searchKey, dhlRequestPromise);
+
+    try {
+      const payload = await dhlRequestPromise;
+      return res.json(payload);
+    } finally {
+      dhlInFlightRequests.delete(searchKey);
+    }
   } catch (err) {
+    const { lat, lng, radius = DHL_SEARCH_RADIUS, country = "MX" } = req.query;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const searchKey =
+      Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? buildDhlSearchKey({
+            latitude,
+            longitude,
+            radius: Number(radius) || DHL_SEARCH_RADIUS,
+            country,
+          })
+        : null;
+
+    if (err?.name === "AbortError") {
+      logDhlEvent("aborted request", { searchKey });
+      return res.status(499).json({ error: "Consulta cancelada" });
+    }
+
+    if (err?.status === 429) {
+      logDhlEvent("dhl 429", { searchKey, details: err.details });
+
+      const cachedEntry = searchKey ? getCachedDhlEntry(searchKey) : null;
+      if (cachedEntry) {
+        logDhlEvent("cache fallback after 429", { searchKey });
+        return res.status(200).json({
+          ...cachedEntry.payload,
+          meta: {
+            ...(cachedEntry.payload.meta || {}),
+            cache: "stale-fallback",
+            cachedAt: cachedEntry.storedAt,
+            fallback: "dhl-429",
+          },
+        });
+      }
+
+      return res.status(429).json({
+        error: "DHL está limitando temporalmente las consultas. Intenta de nuevo en unos segundos.",
+      });
+    }
+
     console.error("DHL error:", err);
-    const status = err.name === "TimeoutError" ? 504 : 500;
-    res.status(status).json({
+    const status = err?.name === "TimeoutError" ? 504 : err?.status || 500;
+    return res.status(status).json({
       error:
         status === 504
           ? "Tiempo de espera agotado consultando DHL"
-          : "Error consultando DHL",
+          : err?.message || "Error consultando DHL",
+      details: err?.details,
     });
   }
 });

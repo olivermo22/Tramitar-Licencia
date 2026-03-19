@@ -87,11 +87,19 @@ let debounceTimeout = null;
 let userMarker = null;
 let sucursalPendiente = null;
 let sucursalConfirmada = null;
-let ultimoCentroConsultado = null;
+let ultimoViewportConsultado = null;
 let ultimoRequestSucursales = 0;
+let sucursalesAbortController = null;
+let busquedaProgramaticaPendiente = false;
 
 const DEFAULT_MAP_CENTER = { lat: 17.4392, lng: -99.5451 };
+const MAP_SEARCH_DEBOUNCE_MS = 1200;
+const MAP_VIEWPORT_TOLERANCE = {
+  center: 0.002,
+  bounds: 0.004,
+};
 const btnCentrarUbicacion = document.getElementById("btnCentrarUbicacion");
+const mapStatus = document.getElementById("mapStatus");
 
 // Estado interno
 let personaUrl = "";
@@ -105,6 +113,101 @@ if (btnAdmin) {
   btnAdmin.addEventListener("click", () => {
     window.location.href = "/login.html";
   });
+}
+
+function actualizarEstadoMapa(type, message) {
+  if (!mapStatus) return;
+
+  if (!message) {
+    mapStatus.textContent = "";
+    mapStatus.className = "map-status hidden";
+    return;
+  }
+
+  mapStatus.textContent = message;
+  mapStatus.className = `map-status ${type || "info"}`;
+}
+
+function limpiarDebounceSucursales() {
+  if (!debounceTimeout) return;
+  clearTimeout(debounceTimeout);
+  debounceTimeout = null;
+}
+
+function redondearMapa(valor, decimales = 4) {
+  return Number(valor.toFixed(decimales));
+}
+
+function obtenerViewportActual() {
+  if (!map) return null;
+
+  const center = map.getCenter();
+  const bounds = map.getBounds();
+
+  return {
+    center: {
+      lat: center.lat,
+      lng: center.lng,
+    },
+    zoom: map.getZoom(),
+    bounds: {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest(),
+    },
+  };
+}
+
+function normalizarViewport(viewport) {
+  if (!viewport) return null;
+
+  return {
+    center: {
+      lat: redondearMapa(viewport.center.lat, 4),
+      lng: redondearMapa(viewport.center.lng, 4),
+    },
+    zoom: Math.round(viewport.zoom),
+    bounds: {
+      north: redondearMapa(viewport.bounds.north, 4),
+      south: redondearMapa(viewport.bounds.south, 4),
+      east: redondearMapa(viewport.bounds.east, 4),
+      west: redondearMapa(viewport.bounds.west, 4),
+    },
+  };
+}
+
+function esViewportEquivalente(actual, previo) {
+  if (!actual || !previo) return false;
+
+  return (
+    Math.round(actual.zoom) === Math.round(previo.zoom) &&
+    Math.abs(actual.center.lat - previo.center.lat) <= MAP_VIEWPORT_TOLERANCE.center &&
+    Math.abs(actual.center.lng - previo.center.lng) <= MAP_VIEWPORT_TOLERANCE.center &&
+    Math.abs(actual.bounds.north - previo.bounds.north) <= MAP_VIEWPORT_TOLERANCE.bounds &&
+    Math.abs(actual.bounds.south - previo.bounds.south) <= MAP_VIEWPORT_TOLERANCE.bounds &&
+    Math.abs(actual.bounds.east - previo.bounds.east) <= MAP_VIEWPORT_TOLERANCE.bounds &&
+    Math.abs(actual.bounds.west - previo.bounds.west) <= MAP_VIEWPORT_TOLERANCE.bounds
+  );
+}
+
+function construirQuerySucursales(viewport) {
+  const params = new URLSearchParams({
+    lat: String(viewport.center.lat),
+    lng: String(viewport.center.lng),
+    zoom: String(Math.round(viewport.zoom)),
+  });
+
+  return `/api/dhl/locations?${params.toString()}`;
+}
+
+function programarCargaSucursales() {
+  if (!map) return;
+
+  limpiarDebounceSucursales();
+  debounceTimeout = setTimeout(() => {
+    cargarSucursales({ origen: "moveend" });
+  }, MAP_SEARCH_DEBOUNCE_MS);
 }
 
 function asegurarMapaBase(lat = DEFAULT_MAP_CENTER.lat, lng = DEFAULT_MAP_CENTER.lng) {
@@ -128,20 +231,23 @@ function asegurarMapaBase(lat = DEFAULT_MAP_CENTER.lat, lng = DEFAULT_MAP_CENTER
     fillOpacity: 0.9,
   }).addTo(map);
 
+  map.on("movestart", () => {
+    limpiarDebounceSucursales();
+  });
+
   map.on("moveend", () => {
-    const center = map.getCenter();
+    if (busquedaProgramaticaPendiente) {
+      busquedaProgramaticaPendiente = false;
+      return;
+    }
 
-    if (debounceTimeout) clearTimeout(debounceTimeout);
-
-    debounceTimeout = setTimeout(() => {
-      cargarSucursales(center.lat, center.lng, false);
-    }, 600);
+    programarCargaSucursales();
   });
 
   requestAnimationFrame(() => map.invalidateSize());
 }
 
-function actualizarUbicacionUsuario(lat, lng) {
+function actualizarUbicacionUsuario(lat, lng, { recentrar = true } = {}) {
   userLat = lat;
   userLng = lng;
 
@@ -151,7 +257,11 @@ function actualizarUbicacionUsuario(lat, lng) {
     userMarker.setLatLng([lat, lng]);
   }
 
-  map.setView([lat, lng], 14);
+  if (recentrar) {
+    busquedaProgramaticaPendiente = true;
+    map.setView([lat, lng], 14);
+  }
+
   requestAnimationFrame(() => map.invalidateSize());
 }
 
@@ -171,43 +281,60 @@ async function obtenerUbicacionUsuario() {
 
 async function centrarEnUbicacionUsuario() {
   try {
+    actualizarEstadoMapa("info", "Obteniendo tu ubicación...");
     const pos = await obtenerUbicacionUsuario();
     actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
-    await cargarSucursales(userLat, userLng, false);
+    await cargarSucursales({ forzar: true, origen: "centrar-ubicacion" });
   } catch (error) {
     console.error("No fue posible obtener la ubicación del usuario:", error);
+    actualizarEstadoMapa("warning", "No fue posible obtener tu ubicación. Puedes mover el mapa manualmente.");
   }
 }
 
 async function iniciarMapa() {
   asegurarMapaBase();
+
   try {
     const pos = await obtenerUbicacionUsuario();
     actualizarUbicacionUsuario(pos.coords.latitude, pos.coords.longitude);
-    await cargarSucursales(userLat, userLng, true);
+    await cargarSucursales({ forzar: true, origen: "inicio-geolocalizacion" });
   } catch (error) {
     console.error("Error inicializando el mapa con geolocalización:", error);
-    await cargarSucursales(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng, true);
+    actualizarEstadoMapa("warning", "No se pudo usar tu ubicación. Mostrando sucursales cercanas al centro predeterminado.");
+    await cargarSucursales({ forzar: true, origen: "inicio-default" });
   }
 }
 
-async function cargarSucursales(lat, lng, inicial = false) {
-  asegurarMapaBase(lat, lng);
+async function cargarSucursales({ forzar = false, origen = "manual" } = {}) {
+  asegurarMapaBase();
 
-  const mismoCentro =
-    ultimoCentroConsultado &&
-    Math.abs(ultimoCentroConsultado.lat - lat) < 0.0001 &&
-    Math.abs(ultimoCentroConsultado.lng - lng) < 0.0001;
+  const viewport = obtenerViewportActual();
+  const viewportNormalizado = normalizarViewport(viewport);
 
-  if (!inicial && mismoCentro) {
+  if (!viewport || !viewportNormalizado) {
     return;
   }
 
-  ultimoCentroConsultado = { lat, lng };
+  if (!forzar && esViewportEquivalente(viewport, ultimoViewportConsultado)) {
+    return;
+  }
+
+  limpiarDebounceSucursales();
+
+  if (sucursalesAbortController) {
+    sucursalesAbortController.abort();
+  }
+
+  const abortController = new AbortController();
+  sucursalesAbortController = abortController;
   const requestId = ++ultimoRequestSucursales;
 
+  actualizarEstadoMapa("info", "Buscando sucursales DHL cercanas...");
+
   try {
-    const res = await fetch(`/api/dhl/locations?lat=${lat}&lng=${lng}`);
+    const res = await fetch(construirQuerySucursales(viewportNormalizado), {
+      signal: abortController.signal,
+    });
     const data = await res.json();
 
     if (requestId !== ultimoRequestSucursales) {
@@ -218,28 +345,55 @@ async function cargarSucursales(lat, lng, inicial = false) {
       throw new Error(data?.error || "No fue posible consultar las sucursales.");
     }
 
+    ultimoViewportConsultado = viewport;
+
     if (!Array.isArray(data.locations) || data.locations.length === 0) {
       actualizarMarkers([]);
+      actualizarEstadoMapa("warning", "No encontramos sucursales DHL en esta zona. Mueve el mapa para intentar en otra área.");
       return;
     }
 
     actualizarMarkers(data.locations);
+
+    if (data?.meta?.cache === "hit" || data?.meta?.cache === "hit-after-wait") {
+      actualizarEstadoMapa("success", `Mostrando ${data.locations.length} sucursales desde caché.`);
+      return;
+    }
+
+    if (data?.meta?.cache === "stale-fallback") {
+      actualizarEstadoMapa("warning", `Mostrando ${data.locations.length} sucursales guardadas temporalmente mientras DHL limita consultas.`);
+      return;
+    }
+
+    actualizarEstadoMapa("success", `Mostrando ${data.locations.length} sucursales DHL cercanas.`);
   } catch (error) {
+    if (error.name === "AbortError") {
+      console.info("Consulta de sucursales DHL cancelada:", { origen });
+      if (requestId === ultimoRequestSucursales) {
+        actualizarEstadoMapa("info", "Actualizando búsqueda de sucursales...");
+      }
+      return;
+    }
+
     console.error("Error cargando sucursales DHL:", error);
 
     if (requestId !== ultimoRequestSucursales) {
       return;
     }
 
+    actualizarEstadoMapa("warning", error.message || "No fue posible cargar sucursales DHL en este momento.");
+  } finally {
+    if (sucursalesAbortController === abortController) {
+      sucursalesAbortController = null;
+    }
   }
 }
 
 if (btnCentrarUbicacion) {
   btnCentrarUbicacion.addEventListener("click", async () => {
     if (userLat && userLng && map) {
-      map.setView([userLat, userLng], 14);
-      requestAnimationFrame(() => map.invalidateSize());
-      await cargarSucursales(userLat, userLng, false);
+      actualizarUbicacionUsuario(userLat, userLng);
+      await cargarSucursales({ forzar: true, origen: "recentrar-usuario" });
       return;
     }
 
