@@ -1129,8 +1129,8 @@ if (form) {
         M: "MOTOCICLISTA - M",
       };
       const vigenciaMap = {
-        "3": "3 AÑOS $720",
-        "5": "5 AÑOS $770",
+        "3": "3 AÑOS $770",
+        "5": "5 AÑOS $820",
       };
 
       const licenciaTexto = licenciaMap[tipoLicencia] || tipoLicencia;
